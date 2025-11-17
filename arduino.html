@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<meta charset="utf-8" />
+<title>Arduino → CSV Logger</title>
+<style>
+  body{font-family:system-ui,Arial;margin:20px;max-width:720px}
+  button{padding:10px 14px;margin:6px;border-radius:10px;border:1px solid #ddd}
+  #status{margin-top:10px}
+  pre{background:#f6f6f6;padding:10px;border-radius:8px;max-height:160px;overflow:auto}
+</style>
+<h2>Arduino → CSV Logger</h2>
+<p>1) Conecta el Arduino. 2) <b>Conectar</b> (9600). 3) <b>Iniciar registro</b>. 4) <b>Detener y Guardar</b>.</p>
+<div>
+  <button id="btnConnect">Conectar</button>
+  <button id="btnStart" disabled>Iniciar registro</button>
+  <button id="btnStop" disabled>Detener y Guardar</button>
+</div>
+<div id="status">Estado: desconectado</div>
+<pre id="preview"></pre>
+
+<script>
+let port, reader, keepReading=false, connected=false;
+let lines = []; let count = 0;
+
+function setStatus(t){ document.getElementById('status').textContent = "Estado: " + t; }
+function setBtns() {
+  document.getElementById('btnStart').disabled = !connected || keepReading;
+  document.getElementById('btnStop').disabled  = !keepReading;
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    connected = true; setStatus("conectado (9600)"); setBtns();
+  } catch(e) { setStatus("error al conectar: " + e.message); }
+}
+
+async function start() {
+  if (!port) return;
+  lines = []; count = 0; keepReading = true;
+  setStatus("registrando…"); setBtns();
+
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  reader = decoder.readable.getReader();
+
+  let buffer = "";
+  (async function loop(){
+    try{
+      while (keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        const parts = buffer.split(/\r?\n/);
+        buffer = parts.pop();
+        for (const ln of parts) {
+          if (!ln) continue;
+          if (ln.startsWith("t_ms,")) continue; // saltar cabecera
+          lines.push(ln); count++;
+          if (count % 10 === 0)
+            document.getElementById('preview').textContent = lines.slice(-10).join("\n");
+        }
+      }
+    } catch(e){ setStatus("lectura detenida: " + e.message); }
+  })();
+}
+
+async function stopAndSave() {
+  keepReading = false;
+  try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch {}
+  try { if (port)   { await port.close(); } } catch {}
+  connected = false; setBtns();
+
+  const header = "t_ms,dist_cm,duration_us,valid\n";
+  const csv = header + lines.join("\n") + "\n";
+  const blob = new Blob([csv], {type: "text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g,'-');
+  a.href = url; a.download = `mediciones_${ts}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  setStatus(`guardado ${count} filas`);
+}
+
+document.getElementById('btnConnect').onclick = connect;
+document.getElementById('btnStart').onclick = start;
+document.getElementById('btnStop').onclick  = stopAndSave;
+
+if (!("serial" in navigator)) {
+  setStatus("tu navegador no soporta Web Serial (usa Chrome/Edge de escritorio).");
+}
+</script>
+</html>
