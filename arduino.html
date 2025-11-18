@@ -12,7 +12,7 @@
     #btnConnect { background-color: #28a745; border-color: #28a745; color: #fff; }   /* Verde */
     #btnStart { background-color: #007bff; border-color: #007bff; color: #fff; }    /* Azul */
     #btnStop { background-color: #ffc107; border-color: #ffc107; color: #212529; }  /* Amarillo */
-    #btnLimpiar { background-color: #28a745; border-color: #28a745; color: #fff; }  /* Verde */
+    #btnLimpiar { background-color: #dc3545; border-color: #dc3545; color: #fff; }  /* Rojo */
     [onclick="cargarDatosPrueba()"] { background-color: #007bff; border-color: #007bff; color: #fff; } /* Azul */
   </style>
   <!-- Chart.js -->
@@ -236,6 +236,10 @@
   }
 
     function limpiarDatos() {
+      if (!confirm("¿Seguro que deseas limpiar todos los datos? Esta acción no se puede deshacer.")) {
+        setStatus("Limpieza cancelada");
+        return;
+      }
       lines = [];
       sumaDistancia = 0; sumaPeso = 0; count = 0;
       sumaTiempoDeteccion = 0; eventosDeteccion = 0;
